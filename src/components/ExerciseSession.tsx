@@ -1,0 +1,372 @@
+import { useEffect, useRef, useState } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ArrowLeft, Mic, MicOff, Trophy, Zap, Target } from 'lucide-react';
+import { toast } from 'sonner';
+import { voiceHandler } from '@/utils/voiceCommands';
+import { drawPose, type Landmark } from '@/utils/poseDetection';
+import { analyzeExercise, EXERCISES, type ExerciseFeedback } from '@/utils/exerciseAnalysis';
+
+interface ExerciseSessionProps {
+  exercise: string;
+  onBack: () => void;
+}
+
+declare global {
+  interface Window {
+    Pose: any;
+    Camera: any;
+  }
+}
+
+const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isActive, setIsActive] = useState(false);
+  const [isListening, setIsListening] = useState(true);
+  const [reps, setReps] = useState(0);
+  const [score, setScore] = useState(0);
+  const [streak, setStreak] = useState(0);
+  const [feedback, setFeedback] = useState<ExerciseFeedback>({
+    status: 'incorrect',
+    message: 'Select exercise and say "start"',
+  });
+  const [duration, setDuration] = useState(0);
+  
+  const poseRef = useRef<any>(null);
+  const cameraRef = useRef<any>(null);
+  const startTimeRef = useRef<number>(0);
+  const lastRepStateRef = useRef<'up' | 'down'>('up');
+  const holdStartRef = useRef<number>(0);
+  const lastFeedbackRef = useRef<string>('');
+
+  const exerciseConfig = EXERCISES[exercise];
+
+  useEffect(() => {
+    // Start voice listening
+    if (isListening) {
+      voiceHandler.startListening(handleVoiceCommand);
+    }
+
+    return () => {
+      voiceHandler.stopListening();
+    };
+  }, [isListening]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isActive) {
+      interval = setInterval(() => {
+        setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isActive]);
+
+  const handleVoiceCommand = (command: string) => {
+    console.log('Processing command:', command);
+    
+    if (command.includes('start') && !isActive) {
+      startExercise();
+    } else if (command.includes('stop') && isActive) {
+      stopExercise();
+    }
+  };
+
+  const startExercise = async () => {
+    try {
+      if (isActive) return;
+
+      voiceHandler.speak(`Starting ${exerciseConfig.name}. Get ready!`);
+      
+      // Initialize MediaPipe Pose
+      if (!window.Pose) {
+        toast.error('MediaPipe Pose not loaded. Please refresh the page.');
+        return;
+      }
+
+      const pose = new window.Pose({
+        locateFile: (file: string) =>
+          `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+      });
+
+      pose.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        enableSegmentation: false,
+        smoothSegmentation: false,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      pose.onResults(onPoseResults);
+      poseRef.current = pose;
+
+      // Start camera
+      if (videoRef.current && window.Camera) {
+        const camera = new window.Camera(videoRef.current, {
+          onFrame: async () => {
+            if (videoRef.current && poseRef.current) {
+              await poseRef.current.send({ image: videoRef.current });
+            }
+          },
+          width: 640,
+          height: 480,
+        });
+        
+        await camera.start();
+        cameraRef.current = camera;
+      }
+
+      setIsActive(true);
+      startTimeRef.current = Date.now();
+      toast.success('Exercise started! Follow the instructions.');
+    } catch (error) {
+      console.error('Error starting exercise:', error);
+      toast.error('Failed to start exercise. Please check camera permissions.');
+    }
+  };
+
+  const stopExercise = async () => {
+    if (!isActive) return;
+
+    voiceHandler.speak('Exercise stopped. Great work!');
+    
+    // Stop camera
+    if (cameraRef.current) {
+      cameraRef.current.stop();
+      cameraRef.current = null;
+    }
+
+    // Stop pose detection
+    if (poseRef.current) {
+      poseRef.current.close();
+      poseRef.current = null;
+    }
+
+    setIsActive(false);
+    
+    toast.success(`Session complete! ${reps} reps, ${score} points, ${streak} streak`);
+  };
+
+  const onPoseResults = (results: any) => {
+    if (!results.poseLandmarks || !canvasRef.current || !videoRef.current) return;
+
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Set canvas size
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Draw pose
+    drawPose(ctx, results.poseLandmarks, canvas.width, canvas.height);
+
+    // Analyze exercise
+    const exerciseFeedback = analyzeExercise(exercise, results.poseLandmarks);
+    setFeedback(exerciseFeedback);
+
+    // Handle rep counting
+    handleRepCounting(exerciseFeedback);
+
+    // Voice feedback (throttled)
+    if (
+      exerciseFeedback.message !== lastFeedbackRef.current &&
+      Date.now() - holdStartRef.current > 2000
+    ) {
+      voiceHandler.speak(exerciseFeedback.message);
+      lastFeedbackRef.current = exerciseFeedback.message;
+      holdStartRef.current = Date.now();
+    }
+  };
+
+  const handleRepCounting = (exerciseFeedback: ExerciseFeedback) => {
+    const now = Date.now();
+    
+    if (exerciseFeedback.status === 'correct') {
+      if (holdStartRef.current === 0) {
+        holdStartRef.current = now;
+      } else if (now - holdStartRef.current >= exerciseConfig.holdTime * 1000) {
+        // Rep completed
+        if (lastRepStateRef.current === 'up') {
+          lastRepStateRef.current = 'down';
+          const newReps = reps + 1;
+          const points = exerciseFeedback.status === 'correct' ? 10 : 5;
+          const newScore = score + points;
+          const newStreak = streak + 1;
+          
+          setReps(newReps);
+          setScore(newScore);
+          setStreak(newStreak);
+          
+          toast.success(`Rep ${newReps} completed! +${points} points`, {
+            duration: 1500,
+          });
+          
+          holdStartRef.current = 0;
+        }
+      }
+    } else {
+      if (lastRepStateRef.current === 'down') {
+        lastRepStateRef.current = 'up';
+      }
+      holdStartRef.current = 0;
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const getFeedbackColor = () => {
+    switch (feedback.status) {
+      case 'correct': return 'bg-gradient-success';
+      case 'warning': return 'bg-gradient-warning';
+      case 'incorrect': return 'bg-destructive';
+      default: return 'bg-muted';
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <Button
+            variant="ghost"
+            onClick={onBack}
+            className="gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
+          
+          <Badge className="text-lg px-4 py-2 bg-gradient-primary text-white">
+            {exerciseConfig.name}
+          </Badge>
+
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={() => setIsListening(!isListening)}
+            className={isListening ? 'border-primary' : ''}
+          >
+            {isListening ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+          </Button>
+        </div>
+
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Video Section */}
+          <Card className="lg:col-span-2 p-6 space-y-4">
+            <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+              <video
+                ref={videoRef}
+                className="absolute inset-0 w-full h-full object-cover scale-x-[-1]"
+                autoPlay
+                playsInline
+              />
+              <canvas
+                ref={canvasRef}
+                className="absolute inset-0 w-full h-full scale-x-[-1]"
+              />
+              
+              {/* Feedback Banner */}
+              <div className={`absolute top-4 left-1/2 -translate-x-1/2 px-6 py-3 rounded-full ${getFeedbackColor()} text-white font-semibold shadow-lg`}>
+                {feedback.message}
+              </div>
+
+              {/* Angle Display */}
+              {feedback.angle && (
+                <div className="absolute bottom-4 right-4 bg-black/70 text-white px-4 py-2 rounded-lg">
+                  <div className="text-sm">Angle</div>
+                  <div className="text-2xl font-bold">{feedback.angle}°</div>
+                  <div className="text-xs text-muted-foreground">{feedback.targetRange}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Control Buttons */}
+            <div className="flex gap-3">
+              {!isActive ? (
+                <Button
+                  onClick={startExercise}
+                  className="flex-1 bg-gradient-success hover:opacity-90 text-white font-semibold py-6 text-lg"
+                >
+                  Start Exercise
+                </Button>
+              ) : (
+                <Button
+                  onClick={stopExercise}
+                  variant="destructive"
+                  className="flex-1 py-6 text-lg font-semibold"
+                >
+                  Stop Exercise
+                </Button>
+              )}
+            </div>
+          </Card>
+
+          {/* Stats Panel */}
+          <div className="space-y-4">
+            <Card className="p-6 space-y-4">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <Trophy className="w-5 h-5 text-primary" />
+                Session Stats
+              </h3>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center p-3 bg-secondary/50 rounded-lg">
+                  <span className="text-muted-foreground">Reps</span>
+                  <span className="text-2xl font-bold text-primary">{reps}</span>
+                </div>
+                
+                <div className="flex justify-between items-center p-3 bg-secondary/50 rounded-lg">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Target className="w-4 h-4" />
+                    Score
+                  </span>
+                  <span className="text-2xl font-bold text-success">{score}</span>
+                </div>
+                
+                <div className="flex justify-between items-center p-3 bg-secondary/50 rounded-lg">
+                  <span className="text-muted-foreground flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    Streak
+                  </span>
+                  <span className="text-2xl font-bold text-warning">{streak}</span>
+                </div>
+                
+                <div className="flex justify-between items-center p-3 bg-secondary/50 rounded-lg">
+                  <span className="text-muted-foreground">Duration</span>
+                  <span className="text-2xl font-bold">{formatTime(duration)}</span>
+                </div>
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-3 bg-primary/5 border-primary/20">
+              <h4 className="font-semibold flex items-center gap-2">
+                <span className="text-xl">💡</span>
+                Tips
+              </h4>
+              <ul className="text-sm space-y-2 text-muted-foreground">
+                <li>• Keep your full body visible</li>
+                <li>• Ensure good lighting</li>
+                <li>• Stand 1-2 meters from camera</li>
+                <li>• Hold correct form to count reps</li>
+              </ul>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ExerciseSession;
