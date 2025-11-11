@@ -7,7 +7,6 @@ import { toast } from 'sonner';
 import { voiceHandler } from '@/utils/voiceCommands';
 import { drawPose, type Landmark } from '@/utils/poseDetection';
 import { analyzeExercise, EXERCISES, type ExerciseFeedback } from '@/utils/exerciseAnalysis';
-import { Header } from '@/components/Header';
 
 interface ExerciseSessionProps {
   exercise: string;
@@ -236,22 +235,23 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-accent/20">
-      <Header />
-      <div className="container mx-auto px-4 py-4">
-        <div className="mb-4 flex items-center justify-between">
+    <div className="min-h-screen bg-gradient-to-br from-background via-secondary/20 to-background p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <Button
             variant="ghost"
-            size="sm"
             onClick={onBack}
-            className="flex items-center gap-2"
+            className="gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
-            Back to Exercises
+            Back
           </Button>
-          <Badge variant="outline" className="text-lg px-4 py-2">
+          
+          <Badge className="text-lg px-4 py-2 bg-gradient-primary text-white">
             {exerciseConfig.name}
           </Badge>
+
           <Button
             variant="outline"
             size="icon"
