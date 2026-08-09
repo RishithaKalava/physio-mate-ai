@@ -76,7 +76,14 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     if (isListening) {
       voiceHandler.startListening({
         onCommand: handleVoiceCommand,
-        onTranscript: (text, isFinal) => setInterimText(isFinal ? '' : text),
+        onTranscript: (text, isFinal) => {
+          setInterimText(isFinal ? '' : text);
+          // React to "stop" as soon as it's heard — waiting for the final
+          // result can take seconds (or never arrive while TTS is talking).
+          if (!isFinal && isActiveRef.current && STOP_RE.test(text)) {
+            triggerCommand('stop', text, 'voice');
+          }
+        },
         onStatus: (status, detail) => {
           setVoiceStatus(status);
           setVoiceError(status === 'error' ? detail ?? 'unknown error' : null);
