@@ -40,6 +40,8 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   const lastRepStateRef = useRef<'up' | 'down'>('up');
   const holdStartRef = useRef<number>(0);
   const lastFeedbackRef = useRef<string>('');
+  const isActiveRef = useRef(false);
+  const busyRef = useRef(false);
 
   const exerciseConfig = EXERCISES[exercise];
 
@@ -47,6 +49,8 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     // Start voice listening
     if (isListening) {
       voiceHandler.startListening(handleVoiceCommand);
+    } else {
+      voiceHandler.stopListening();
     }
 
     return () => {
@@ -55,7 +59,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   }, [isListening]);
 
   useEffect(() => {
-    let interval: NodeJS.Timeout;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (isActive) {
       interval = setInterval(() => {
         setDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
@@ -66,49 +70,67 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
 
   const handleVoiceCommand = (command: string) => {
     console.log('Processing command:', command);
-    
-    if (command.includes('start') && !isActive) {
-      startExercise();
-    } else if (command.includes('stop') && isActive) {
-      stopExercise();
+
+    const text = command.toLowerCase();
+    const wantsStop = /\b(stop|pause|end|finish|halt)\b/.test(text);
+    const wantsStart = /\b(start|begin|go|resume)\b/.test(text);
+
+    // "stop" wins if both appear
+    if (wantsStop) {
+      if (isActiveRef.current) stopExercise();
+      return;
+    }
+    if (wantsStart) {
+      if (!isActiveRef.current) startExercise();
     }
   };
 
   const startExercise = async () => {
     try {
-      if (isActive) return;
+      if (isActiveRef.current || busyRef.current) return;
+      busyRef.current = true;
+      isActiveRef.current = true;
 
       voiceHandler.speak(`Starting ${exerciseConfig.name}. Get ready!`);
       
       // Initialize MediaPipe Pose
       if (!window.Pose) {
         toast.error('MediaPipe Pose not loaded. Please refresh the page.');
+        isActiveRef.current = false;
+        busyRef.current = false;
         return;
       }
 
-      const pose = new window.Pose({
-        locateFile: (file: string) =>
-          `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
-      });
+      // Reuse a single Pose instance — re-creating after close() crashes the wasm module
+      if (!poseRef.current) {
+        const pose = new window.Pose({
+          locateFile: (file: string) =>
+            `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+        });
 
-      pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        enableSegmentation: false,
-        smoothSegmentation: false,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5,
-      });
+        pose.setOptions({
+          modelComplexity: 1,
+          smoothLandmarks: true,
+          enableSegmentation: false,
+          smoothSegmentation: false,
+          minDetectionConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+        });
 
-      pose.onResults(onPoseResults);
-      poseRef.current = pose;
+        pose.onResults(onPoseResults);
+        poseRef.current = pose;
+      }
 
       // Start camera
-      if (videoRef.current && window.Camera) {
+      if (videoRef.current && window.Camera && !cameraRef.current) {
         const camera = new window.Camera(videoRef.current, {
           onFrame: async () => {
-            if (videoRef.current && poseRef.current) {
-              await poseRef.current.send({ image: videoRef.current });
+            if (videoRef.current && poseRef.current && isActiveRef.current) {
+              try {
+                await poseRef.current.send({ image: videoRef.current });
+              } catch {
+                // ignore transient frame errors
+              }
             }
           },
           width: 640,
@@ -117,6 +139,8 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
         
         await camera.start();
         cameraRef.current = camera;
+      } else if (cameraRef.current) {
+        await cameraRef.current.start();
       }
 
       setIsActive(true);
@@ -124,26 +148,28 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
       toast.success('Exercise started! Follow the instructions.');
     } catch (error) {
       console.error('Error starting exercise:', error);
+      isActiveRef.current = false;
       toast.error('Failed to start exercise. Please check camera permissions.');
+    } finally {
+      busyRef.current = false;
     }
   };
 
   const stopExercise = async () => {
-    if (!isActive) return;
+    if (!isActiveRef.current) return;
+    isActiveRef.current = false;
 
     voiceHandler.speak('Exercise stopped. Great work!');
     
     // Stop camera
     if (cameraRef.current) {
-      cameraRef.current.stop();
-      cameraRef.current = null;
+      try {
+        cameraRef.current.stop();
+      } catch {
+        // ignore
+      }
     }
-
-    // Stop pose detection
-    if (poseRef.current) {
-      poseRef.current.close();
-      poseRef.current = null;
-    }
+    // Keep the Pose instance alive; closing it breaks a later restart.
 
     setIsActive(false);
     
@@ -151,6 +177,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   };
 
   const onPoseResults = (results: any) => {
+    if (!isActiveRef.current) return;
     if (!results.poseLandmarks || !canvasRef.current || !videoRef.current) return;
 
     const canvas = canvasRef.current;
