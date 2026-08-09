@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Mic, MicOff, Trophy, Zap, Target } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Trophy, Zap, Target, AudioLines, Play, Square, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { voiceHandler } from '@/utils/voiceCommands';
+import { voiceHandler, type VoiceStatus } from '@/utils/voiceCommands';
 import { drawPose, type Landmark } from '@/utils/poseDetection';
 import { analyzeExercise, EXERCISES, type ExerciseFeedback } from '@/utils/exerciseAnalysis';
 
@@ -33,6 +33,12 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     message: 'Select exercise and say "start"',
   });
   const [duration, setDuration] = useState(0);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [interimText, setInterimText] = useState('');
+  const [heardLog, setHeardLog] = useState<
+    { id: number; text: string; action: 'start' | 'stop' | 'ignored'; time: string }[]
+  >([]);
   
   const poseRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
@@ -62,9 +68,17 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   useEffect(() => {
     // Start voice listening
     if (isListening) {
-      voiceHandler.startListening(handleVoiceCommand);
+      voiceHandler.startListening({
+        onCommand: handleVoiceCommand,
+        onTranscript: (text, isFinal) => setInterimText(isFinal ? '' : text),
+        onStatus: (status, detail) => {
+          setVoiceStatus(status);
+          setVoiceError(status === 'error' ? detail ?? 'unknown error' : null);
+        },
+      });
     } else {
       voiceHandler.stopListening();
+      setInterimText('');
     }
 
     return () => {
@@ -88,6 +102,25 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     const text = command.toLowerCase();
     const wantsStop = /\b(stop|pause|end|finish|halt)\b/.test(text);
     const wantsStart = /\b(start|begin|go|resume)\b/.test(text);
+
+    const action: 'start' | 'stop' | 'ignored' = wantsStop
+      ? 'stop'
+      : wantsStart
+      ? 'start'
+      : 'ignored';
+
+    setInterimText('');
+    setHeardLog((prev) =>
+      [
+        {
+          id: Date.now() + Math.random(),
+          text: command,
+          action,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        },
+        ...prev,
+      ].slice(0, 8)
+    );
 
     // "stop" wins if both appear
     if (wantsStop) {
@@ -388,6 +421,89 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
                   <span className="text-muted-foreground">Duration</span>
                   <span className="text-2xl font-bold">{formatTime(duration)}</span>
                 </div>
+              </div>
+            </Card>
+
+            <Card className="p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold flex items-center gap-2">
+                  <AudioLines className="w-5 h-5 text-primary" />
+                  Voice Monitor
+                </h3>
+                <Badge
+                  variant="outline"
+                  className={
+                    voiceStatus === 'listening'
+                      ? 'border-success text-success'
+                      : voiceStatus === 'error' || voiceStatus === 'unsupported'
+                      ? 'border-destructive text-destructive'
+                      : 'text-muted-foreground'
+                  }
+                >
+                  {voiceStatus === 'listening'
+                    ? 'Listening'
+                    : voiceStatus === 'error'
+                    ? 'Error'
+                    : voiceStatus === 'unsupported'
+                    ? 'Unsupported'
+                    : 'Idle'}
+                </Badge>
+              </div>
+
+              <div className="min-h-[3.5rem] p-3 rounded-lg bg-secondary/50 text-sm">
+                {voiceStatus === 'unsupported' ? (
+                  <span className="text-destructive">
+                    Speech recognition isn't supported in this browser. Use the buttons instead.
+                  </span>
+                ) : interimText ? (
+                  <span className="italic text-foreground">"{interimText}"</span>
+                ) : (
+                  <span className="text-muted-foreground">
+                    {isListening ? 'Say "start" or "stop"…' : 'Microphone is off'}
+                  </span>
+                )}
+              </div>
+
+              {voiceError && (
+                <p className="text-xs text-destructive">Mic error: {voiceError}</p>
+              )}
+
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Recent</p>
+                {heardLog.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Nothing heard yet.</p>
+                ) : (
+                  <ul className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {heardLog.map((entry) => (
+                      <li
+                        key={entry.id}
+                        className="flex items-start gap-2 text-sm p-2 rounded-md bg-secondary/40"
+                      >
+                        <span
+                          className={
+                            entry.action === 'start'
+                              ? 'text-success mt-0.5'
+                              : entry.action === 'stop'
+                              ? 'text-destructive mt-0.5'
+                              : 'text-muted-foreground mt-0.5'
+                          }
+                        >
+                          {entry.action === 'start' ? (
+                            <Play className="w-4 h-4" />
+                          ) : entry.action === 'stop' ? (
+                            <Square className="w-4 h-4" />
+                          ) : (
+                            <HelpCircle className="w-4 h-4" />
+                          )}
+                        </span>
+                        <span className="flex-1 break-words">{entry.text}</span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {entry.time}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             </Card>
 
