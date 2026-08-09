@@ -37,7 +37,13 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [interimText, setInterimText] = useState('');
   const [heardLog, setHeardLog] = useState<
-    { id: number; text: string; action: 'start' | 'stop' | 'ignored'; time: string }[]
+    {
+      id: number;
+      text: string;
+      action: 'start' | 'stop' | 'ignored';
+      source: 'voice' | 'manual';
+      time: string;
+    }[]
   >([]);
   
   const poseRef = useRef<any>(null);
@@ -96,6 +102,38 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     return () => clearInterval(interval);
   }, [isActive]);
 
+  const addLogEntry = (
+    text: string,
+    action: 'start' | 'stop' | 'ignored',
+    source: 'voice' | 'manual'
+  ) => {
+    setHeardLog((prev) =>
+      [
+        {
+          id: Date.now() + Math.random(),
+          text,
+          action,
+          source,
+          time: new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }),
+        },
+        ...prev,
+      ].slice(0, 8)
+    );
+  };
+
+  const handleManualControl = (action: 'start' | 'stop') => {
+    addLogEntry(action === 'start' ? 'Manual start' : 'Manual stop', action, 'manual');
+    if (action === 'start') {
+      startExercise();
+    } else {
+      stopExercise();
+    }
+  };
+
   const handleVoiceCommand = (command: string) => {
     console.log('Processing command:', command);
 
@@ -110,17 +148,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
       : 'ignored';
 
     setInterimText('');
-    setHeardLog((prev) =>
-      [
-        {
-          id: Date.now() + Math.random(),
-          text: command,
-          action,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        },
-        ...prev,
-      ].slice(0, 8)
-    );
+    addLogEntry(command, action, 'voice');
 
     // "stop" wins if both appear
     if (wantsStop) {
@@ -366,24 +394,30 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
               )}
             </div>
 
-            {/* Control Buttons */}
-            <div className="flex gap-3">
-              {!isActive ? (
+            {/* Manual controls — always available, override voice commands */}
+            <div className="space-y-2">
+              <div className="flex gap-3">
                 <Button
-                  onClick={startExercise}
-                  className="flex-1 bg-gradient-success hover:opacity-90 text-white font-semibold py-6 text-lg"
+                  onClick={() => handleManualControl('start')}
+                  disabled={isActive}
+                  className="flex-1 bg-gradient-success hover:opacity-90 text-white font-semibold py-6 text-lg gap-2"
                 >
+                  <Play className="w-5 h-5" />
                   Start Exercise
                 </Button>
-              ) : (
                 <Button
-                  onClick={stopExercise}
+                  onClick={() => handleManualControl('stop')}
+                  disabled={!isActive}
                   variant="destructive"
-                  className="flex-1 py-6 text-lg font-semibold"
+                  className="flex-1 py-6 text-lg font-semibold gap-2"
                 >
+                  <Square className="w-5 h-5" />
                   Stop Exercise
                 </Button>
-              )}
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Manual controls always work — use them if voice recognition is unreliable.
+              </p>
             </div>
           </Card>
 
@@ -496,7 +530,12 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
                             <HelpCircle className="w-4 h-4" />
                           )}
                         </span>
-                        <span className="flex-1 break-words">{entry.text}</span>
+                        <span className="flex-1 break-words">
+                          {entry.text}
+                          {entry.source === 'manual' && (
+                            <span className="ml-2 text-xs text-muted-foreground">(button)</span>
+                          )}
+                        </span>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {entry.time}
                         </span>
