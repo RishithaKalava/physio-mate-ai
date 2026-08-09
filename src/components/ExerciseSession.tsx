@@ -57,6 +57,10 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   const lastFeedbackRef = useRef<string>('');
   const isActiveRef = useRef(false);
   const busyRef = useRef(false);
+  const lastCommandRef = useRef<{ action: 'start' | 'stop' | null; at: number }>({
+    action: null,
+    at: 0,
+  });
 
   const exerciseConfig = EXERCISES[exercise];
 
