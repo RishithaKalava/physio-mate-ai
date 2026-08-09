@@ -37,7 +37,13 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [interimText, setInterimText] = useState('');
   const [heardLog, setHeardLog] = useState<
-    { id: number; text: string; action: 'start' | 'stop' | 'ignored'; time: string }[]
+    {
+      id: number;
+      text: string;
+      action: 'start' | 'stop' | 'ignored';
+      source: 'voice' | 'manual';
+      time: string;
+    }[]
   >([]);
   
   const poseRef = useRef<any>(null);
