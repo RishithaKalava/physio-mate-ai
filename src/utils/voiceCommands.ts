@@ -68,6 +68,8 @@ export class VoiceCommandHandler {
   private synthesis: SpeechSynthesis;
   private isListening: boolean = false;
   private onCommand: ((command: string) => void) | null = null;
+  private restartTimer: ReturnType<typeof setTimeout> | null = null;
+  private starting: boolean = false;
 
   constructor() {
     this.synthesis = window.speechSynthesis;
@@ -84,25 +86,40 @@ export class VoiceCommandHandler {
       this.recognition.lang = 'en-US';
 
       this.recognition.onresult = (event) => {
-        const last = event.results.length - 1;
-        const command = event.results[last][0].transcript.toLowerCase().trim();
-        console.log('Voice command detected:', command);
-        
-        if (this.onCommand) {
-          this.onCommand(command);
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (!result.isFinal) continue;
+          const command = result[0].transcript.toLowerCase().trim();
+          console.log('Voice command detected:', command);
+          this.onCommand?.(command);
         }
       };
 
       this.recognition.onerror = (event) => {
-        console.error('Speech recognition error:', event.error);
+        // "no-speech" / "aborted" are normal in continuous mode
+        if (event.error === 'no-speech' || event.error === 'aborted') return;
+        if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+          this.isListening = false;
+        }
+        console.warn('Speech recognition error:', event.error);
       };
 
       this.recognition.onend = () => {
-        // Restart if still should be listening
-        if (this.isListening) {
-          this.recognition?.start();
-        }
+        this.starting = false;
+        if (!this.isListening) return;
+        if (this.restartTimer) clearTimeout(this.restartTimer);
+        this.restartTimer = setTimeout(() => this.safeStart(), 300);
       };
+    }
+  }
+
+  private safeStart(): void {
+    if (!this.recognition || !this.isListening || this.starting) return;
+    try {
+      this.starting = true;
+      this.recognition.start();
+    } catch {
+      this.starting = false;
     }
   }
 
@@ -114,13 +131,7 @@ export class VoiceCommandHandler {
 
     this.onCommand = onCommand;
     this.isListening = true;
-
-    try {
-      this.recognition.start();
-      console.log('Voice recognition started');
-    } catch (error) {
-      console.error('Error starting recognition:', error);
-    }
+    this.safeStart();
   }
 
   stopListening(): void {
@@ -128,12 +139,15 @@ export class VoiceCommandHandler {
 
     this.isListening = false;
     this.onCommand = null;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
 
     try {
-      this.recognition.stop();
-      console.log('Voice recognition stopped');
-    } catch (error) {
-      console.error('Error stopping recognition:', error);
+      this.recognition.abort();
+    } catch {
+      // ignore
     }
   }
 
