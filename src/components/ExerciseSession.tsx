@@ -2,9 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Mic, MicOff, Trophy, Zap, Target } from 'lucide-react';
+import { ArrowLeft, Mic, MicOff, Trophy, Zap, Target, AudioLines, Play, Square, HelpCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { voiceHandler } from '@/utils/voiceCommands';
+import { voiceHandler, type VoiceStatus } from '@/utils/voiceCommands';
 import { drawPose, type Landmark } from '@/utils/poseDetection';
 import { analyzeExercise, EXERCISES, type ExerciseFeedback } from '@/utils/exerciseAnalysis';
 
@@ -33,6 +33,12 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     message: 'Select exercise and say "start"',
   });
   const [duration, setDuration] = useState(0);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>('idle');
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [interimText, setInterimText] = useState('');
+  const [heardLog, setHeardLog] = useState<
+    { id: number; text: string; action: 'start' | 'stop' | 'ignored'; time: string }[]
+  >([]);
   
   const poseRef = useRef<any>(null);
   const cameraRef = useRef<any>(null);
@@ -62,9 +68,17 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   useEffect(() => {
     // Start voice listening
     if (isListening) {
-      voiceHandler.startListening(handleVoiceCommand);
+      voiceHandler.startListening({
+        onCommand: handleVoiceCommand,
+        onTranscript: (text, isFinal) => setInterimText(isFinal ? '' : text),
+        onStatus: (status, detail) => {
+          setVoiceStatus(status);
+          setVoiceError(status === 'error' ? detail ?? 'unknown error' : null);
+        },
+      });
     } else {
       voiceHandler.stopListening();
+      setInterimText('');
     }
 
     return () => {
@@ -88,6 +102,25 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     const text = command.toLowerCase();
     const wantsStop = /\b(stop|pause|end|finish|halt)\b/.test(text);
     const wantsStart = /\b(start|begin|go|resume)\b/.test(text);
+
+    const action: 'start' | 'stop' | 'ignored' = wantsStop
+      ? 'stop'
+      : wantsStart
+      ? 'start'
+      : 'ignored';
+
+    setInterimText('');
+    setHeardLog((prev) =>
+      [
+        {
+          id: Date.now() + Math.random(),
+          text: command,
+          action,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        },
+        ...prev,
+      ].slice(0, 8)
+    );
 
     // "stop" wins if both appear
     if (wantsStop) {
