@@ -132,39 +132,55 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     );
   };
 
-  const handleManualControl = (action: 'start' | 'stop') => {
-    addLogEntry(action === 'start' ? 'Manual start' : 'Manual stop', action, 'manual');
+  const triggerCommand = (
+    action: 'start' | 'stop',
+    text: string,
+    source: 'voice' | 'manual'
+  ) => {
+    // Ignore repeats of the same command (interim + final results both fire)
+    const now = Date.now();
+    if (
+      lastCommandRef.current.action === action &&
+      now - lastCommandRef.current.at < 1500
+    ) {
+      return;
+    }
+    lastCommandRef.current = { action, at: now };
+
+    addLogEntry(text, action, source);
+    setInterimText('');
+
     if (action === 'start') {
-      startExercise();
-    } else {
+      if (!isActiveRef.current) startExercise();
+    } else if (isActiveRef.current) {
       stopExercise();
     }
+  };
+
+  const handleManualControl = (action: 'start' | 'stop') => {
+    lastCommandRef.current = { action: null, at: 0 };
+    triggerCommand(action, action === 'start' ? 'Manual start' : 'Manual stop', 'manual');
   };
 
   const handleVoiceCommand = (command: string) => {
     console.log('Processing command:', command);
 
     const text = command.toLowerCase();
-    const wantsStop = /\b(stop|pause|end|finish|halt)\b/.test(text);
-    const wantsStart = /\b(start|begin|go|resume)\b/.test(text);
-
-    const action: 'start' | 'stop' | 'ignored' = wantsStop
-      ? 'stop'
-      : wantsStart
-      ? 'start'
-      : 'ignored';
-
-    setInterimText('');
-    addLogEntry(command, action, 'voice');
+    const wantsStop = STOP_RE.test(text);
+    const wantsStart = START_RE.test(text);
 
     // "stop" wins if both appear
     if (wantsStop) {
-      if (isActiveRef.current) stopExercise();
+      triggerCommand('stop', command, 'voice');
       return;
     }
     if (wantsStart) {
-      if (!isActiveRef.current) startExercise();
+      triggerCommand('start', command, 'voice');
+      return;
     }
+
+    setInterimText('');
+    addLogEntry(command, 'ignored', 'voice');
   };
 
   const startExercise = async () => {
