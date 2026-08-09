@@ -530,7 +530,12 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
                             <HelpCircle className="w-4 h-4" />
                           )}
                         </span>
-                        <span className="flex-1 break-words">{entry.text}</span>
+                        <span className="flex-1 break-words">
+                          {entry.text}
+                          {entry.source === 'manual' && (
+                            <span className="ml-2 text-xs text-muted-foreground">(button)</span>
+                          )}
+                        </span>
                         <span className="text-xs text-muted-foreground whitespace-nowrap">
                           {entry.time}
                         </span>
