@@ -366,24 +366,30 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
               )}
             </div>
 
-            {/* Control Buttons */}
-            <div className="flex gap-3">
-              {!isActive ? (
+            {/* Manual controls — always available, override voice commands */}
+            <div className="space-y-2">
+              <div className="flex gap-3">
                 <Button
-                  onClick={startExercise}
-                  className="flex-1 bg-gradient-success hover:opacity-90 text-white font-semibold py-6 text-lg"
+                  onClick={() => handleManualControl('start')}
+                  disabled={isActive}
+                  className="flex-1 bg-gradient-success hover:opacity-90 text-white font-semibold py-6 text-lg gap-2"
                 >
+                  <Play className="w-5 h-5" />
                   Start Exercise
                 </Button>
-              ) : (
                 <Button
-                  onClick={stopExercise}
+                  onClick={() => handleManualControl('stop')}
+                  disabled={!isActive}
                   variant="destructive"
-                  className="flex-1 py-6 text-lg font-semibold"
+                  className="flex-1 py-6 text-lg font-semibold gap-2"
                 >
+                  <Square className="w-5 h-5" />
                   Stop Exercise
                 </Button>
-              )}
+              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Manual controls always work — use them if voice recognition is unreliable.
+              </p>
             </div>
           </Card>
 
