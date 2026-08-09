@@ -63,11 +63,21 @@ declare global {
   }
 }
 
+export type VoiceStatus = 'idle' | 'listening' | 'error' | 'unsupported';
+
+export interface VoiceEvents {
+  onCommand: (command: string) => void;
+  onTranscript?: (text: string, isFinal: boolean) => void;
+  onStatus?: (status: VoiceStatus, detail?: string) => void;
+}
+
 export class VoiceCommandHandler {
   private recognition: SpeechRecognition | null = null;
   private synthesis: SpeechSynthesis;
   private isListening: boolean = false;
   private onCommand: ((command: string) => void) | null = null;
+  private onTranscript: ((text: string, isFinal: boolean) => void) | null = null;
+  private onStatus: ((status: VoiceStatus, detail?: string) => void) | null = null;
   private restartTimer: ReturnType<typeof setTimeout> | null = null;
   private starting: boolean = false;
 
@@ -82,14 +92,20 @@ export class VoiceCommandHandler {
     if (SpeechRecognition) {
       this.recognition = new SpeechRecognition();
       this.recognition.continuous = true;
-      this.recognition.interimResults = false;
+      this.recognition.interimResults = true;
       this.recognition.lang = 'en-US';
+
+      this.recognition.onstart = () => {
+        this.onStatus?.('listening');
+      };
 
       this.recognition.onresult = (event) => {
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const result = event.results[i];
-          if (!result.isFinal) continue;
           const command = result[0].transcript.toLowerCase().trim();
+          if (!command) continue;
+          this.onTranscript?.(command, result.isFinal);
+          if (!result.isFinal) continue;
           console.log('Voice command detected:', command);
           this.onCommand?.(command);
         }
@@ -102,11 +118,15 @@ export class VoiceCommandHandler {
           this.isListening = false;
         }
         console.warn('Speech recognition error:', event.error);
+        this.onStatus?.('error', event.error);
       };
 
       this.recognition.onend = () => {
         this.starting = false;
-        if (!this.isListening) return;
+        if (!this.isListening) {
+          this.onStatus?.('idle');
+          return;
+        }
         if (this.restartTimer) clearTimeout(this.restartTimer);
         this.restartTimer = setTimeout(() => this.safeStart(), 300);
       };
@@ -123,13 +143,19 @@ export class VoiceCommandHandler {
     }
   }
 
-  startListening(onCommand: (command: string) => void): void {
+  startListening(handler: ((command: string) => void) | VoiceEvents): void {
+    const events: VoiceEvents =
+      typeof handler === 'function' ? { onCommand: handler } : handler;
+
     if (!this.recognition) {
       console.warn('Speech recognition not supported');
+      events.onStatus?.('unsupported');
       return;
     }
 
-    this.onCommand = onCommand;
+    this.onCommand = events.onCommand;
+    this.onTranscript = events.onTranscript ?? null;
+    this.onStatus = events.onStatus ?? null;
     this.isListening = true;
     this.safeStart();
   }
