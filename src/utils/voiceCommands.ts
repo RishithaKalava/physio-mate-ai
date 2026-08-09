@@ -164,7 +164,6 @@ export class VoiceCommandHandler {
     if (!this.recognition) return;
 
     this.isListening = false;
-    this.onCommand = null;
     if (this.restartTimer) {
       clearTimeout(this.restartTimer);
       this.restartTimer = null;
@@ -175,6 +174,11 @@ export class VoiceCommandHandler {
     } catch {
       // ignore
     }
+
+    this.onCommand = null;
+    this.onTranscript = null;
+    this.onStatus?.('idle');
+    this.onStatus = null;
   }
 
   speak(text: string, options?: { rate?: number; pitch?: number }): Promise<void> {
