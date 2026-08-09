@@ -309,7 +309,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     // Voice feedback (throttled)
     if (
       exerciseFeedback.message !== lastFeedbackRef.current &&
-      Date.now() - holdStartRef.current > 2000
+      Date.now() - holdStartRef.current > 4000
     ) {
       voiceHandler.speak(exerciseFeedback.message);
       lastFeedbackRef.current = exerciseFeedback.message;
