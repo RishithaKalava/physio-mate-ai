@@ -13,6 +13,9 @@ interface ExerciseSessionProps {
   onBack: () => void;
 }
 
+const STOP_RE = /\b(stop|stopp?ed|pause|end|finish|halt|quit)\b/;
+const START_RE = /\b(start|begin|go|resume)\b/;
+
 declare global {
   interface Window {
     Pose: any;
@@ -54,6 +57,10 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   const lastFeedbackRef = useRef<string>('');
   const isActiveRef = useRef(false);
   const busyRef = useRef(false);
+  const lastCommandRef = useRef<{ action: 'start' | 'stop' | null; at: number }>({
+    action: null,
+    at: 0,
+  });
 
   const exerciseConfig = EXERCISES[exercise];
 
@@ -76,7 +83,14 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     if (isListening) {
       voiceHandler.startListening({
         onCommand: handleVoiceCommand,
-        onTranscript: (text, isFinal) => setInterimText(isFinal ? '' : text),
+        onTranscript: (text, isFinal) => {
+          setInterimText(isFinal ? '' : text);
+          // React to "stop" as soon as it's heard — waiting for the final
+          // result can take seconds (or never arrive while TTS is talking).
+          if (!isFinal && isActiveRef.current && STOP_RE.test(text)) {
+            triggerCommand('stop', text, 'voice');
+          }
+        },
         onStatus: (status, detail) => {
           setVoiceStatus(status);
           setVoiceError(status === 'error' ? detail ?? 'unknown error' : null);
@@ -125,39 +139,55 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     );
   };
 
-  const handleManualControl = (action: 'start' | 'stop') => {
-    addLogEntry(action === 'start' ? 'Manual start' : 'Manual stop', action, 'manual');
+  const triggerCommand = (
+    action: 'start' | 'stop',
+    text: string,
+    source: 'voice' | 'manual'
+  ) => {
+    // Ignore repeats of the same command (interim + final results both fire)
+    const now = Date.now();
+    if (
+      lastCommandRef.current.action === action &&
+      now - lastCommandRef.current.at < 1500
+    ) {
+      return;
+    }
+    lastCommandRef.current = { action, at: now };
+
+    addLogEntry(text, action, source);
+    setInterimText('');
+
     if (action === 'start') {
-      startExercise();
-    } else {
+      if (!isActiveRef.current) startExercise();
+    } else if (isActiveRef.current) {
       stopExercise();
     }
+  };
+
+  const handleManualControl = (action: 'start' | 'stop') => {
+    lastCommandRef.current = { action: null, at: 0 };
+    triggerCommand(action, action === 'start' ? 'Manual start' : 'Manual stop', 'manual');
   };
 
   const handleVoiceCommand = (command: string) => {
     console.log('Processing command:', command);
 
     const text = command.toLowerCase();
-    const wantsStop = /\b(stop|pause|end|finish|halt)\b/.test(text);
-    const wantsStart = /\b(start|begin|go|resume)\b/.test(text);
-
-    const action: 'start' | 'stop' | 'ignored' = wantsStop
-      ? 'stop'
-      : wantsStart
-      ? 'start'
-      : 'ignored';
-
-    setInterimText('');
-    addLogEntry(command, action, 'voice');
+    const wantsStop = STOP_RE.test(text);
+    const wantsStart = START_RE.test(text);
 
     // "stop" wins if both appear
     if (wantsStop) {
-      if (isActiveRef.current) stopExercise();
+      triggerCommand('stop', command, 'voice');
       return;
     }
     if (wantsStart) {
-      if (!isActiveRef.current) startExercise();
+      triggerCommand('start', command, 'voice');
+      return;
     }
+
+    setInterimText('');
+    addLogEntry(command, 'ignored', 'voice');
   };
 
   const startExercise = async () => {
@@ -279,7 +309,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     // Voice feedback (throttled)
     if (
       exerciseFeedback.message !== lastFeedbackRef.current &&
-      Date.now() - holdStartRef.current > 2000
+      Date.now() - holdStartRef.current > 4000
     ) {
       voiceHandler.speak(exerciseFeedback.message);
       lastFeedbackRef.current = exerciseFeedback.message;
