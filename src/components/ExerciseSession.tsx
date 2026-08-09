@@ -97,6 +97,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
   }, [isActive]);
 
   const handleVoiceCommand = (command: string) => {
+    logHeard(command);
     console.log('Processing command:', command);
 
     const text = command.toLowerCase();
