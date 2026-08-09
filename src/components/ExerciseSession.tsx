@@ -96,8 +96,39 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
     return () => clearInterval(interval);
   }, [isActive]);
 
+  const addLogEntry = (
+    text: string,
+    action: 'start' | 'stop' | 'ignored',
+    source: 'voice' | 'manual'
+  ) => {
+    setHeardLog((prev) =>
+      [
+        {
+          id: Date.now() + Math.random(),
+          text,
+          action,
+          source,
+          time: new Date().toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+          }),
+        },
+        ...prev,
+      ].slice(0, 8)
+    );
+  };
+
+  const handleManualControl = (action: 'start' | 'stop') => {
+    addLogEntry(action === 'start' ? 'Manual start' : 'Manual stop', action, 'manual');
+    if (action === 'start') {
+      startExercise();
+    } else {
+      stopExercise();
+    }
+  };
+
   const handleVoiceCommand = (command: string) => {
-    logHeard(command);
     console.log('Processing command:', command);
 
     const text = command.toLowerCase();
@@ -111,17 +142,7 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
       : 'ignored';
 
     setInterimText('');
-    setHeardLog((prev) =>
-      [
-        {
-          id: Date.now() + Math.random(),
-          text: command,
-          action,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        },
-        ...prev,
-      ].slice(0, 8)
-    );
+    addLogEntry(command, action, 'voice');
 
     // "stop" wins if both appear
     if (wantsStop) {
