@@ -45,6 +45,20 @@ const ExerciseSession = ({ exercise, onBack }: ExerciseSessionProps) => {
 
   const exerciseConfig = EXERCISES[exercise];
 
+  // Release camera/pose on unmount
+  useEffect(() => {
+    return () => {
+      isActiveRef.current = false;
+      try {
+        cameraRef.current?.stop();
+      } catch {
+        // ignore
+      }
+      cameraRef.current = null;
+      poseRef.current = null;
+    };
+  }, []);
+
   useEffect(() => {
     // Start voice listening
     if (isListening) {
