@@ -13,6 +13,9 @@ interface ExerciseSessionProps {
   onBack: () => void;
 }
 
+const STOP_RE = /\b(stop|stopp?ed|pause|end|finish|halt|quit)\b/;
+const START_RE = /\b(start|begin|go|resume)\b/;
+
 declare global {
   interface Window {
     Pose: any;
