@@ -1,73 +1,160 @@
-# Welcome to your Lovable project
+# PhysioMate AI – AI-Powered Physiotherapy Assistant
 
-## Project info
+PhysioMate AI is an interactive web application designed to support physiotherapy exercises through pose visualization, movement angle measurement, exercise performance tracking and voice interaction.
 
-**URL**: https://lovable.dev/projects/86e2d420-4fb2-432a-bfdd-e31f3fa80b61
+The application provides visual feedback during exercise sessions, allowing users to monitor their movements and track exercise performance through an interactive interface.
 
-## How can I edit this code?
+## Project Overview
 
-There are several ways of editing your application.
+Performing physiotherapy exercises without continuous supervision can make it difficult for individuals to understand their movements, maintain proper exercise form and monitor their progress.
 
-**Use Lovable**
+PhysioMate AI aims to address this challenge by providing an interactive digital platform that combines exercise monitoring, visual feedback and session statistics.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/86e2d420-4fb2-432a-bfdd-e31f3fa80b61) and start prompting.
+## Key Features
 
-Changes made via Lovable will be committed automatically to this repo.
+- **Real-Time Pose Visualization:** Displays body landmarks during supported exercise sessions.
+- **Movement Angle Measurement:** Displays movement angles to help users monitor exercise positioning.
+- **Repetition Counting:** Tracks the number of completed exercise repetitions.
+- **Performance Scoring:** Displays exercise performance scores during sessions.
+- **Streak Tracking:** Monitors consecutive repetitions.
+- **Session Statistics:** Displays exercise duration, repetitions, score and streak information.
+- **Voice Interaction:** Provides a voice interaction interface for application control.
+- **Exercise Feedback:** Displays visual feedback to guide users during supported exercises.
 
-**Use your preferred IDE**
+## Application Screenshots
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Shoulder Raise – Exercise Monitoring
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+The exercise monitoring interface displays body pose landmarks, movement angle measurements and live session statistics.
 
-Follow these steps:
+![PhysioMate AI - Shoulder Raise Exercise Monitoring](screenshots/shoulder-raise-session.png)
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+*Figure 1: Shoulder Raise exercise monitoring interface.*
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+## Technology Stack
 
-# Step 3: Install the necessary dependencies.
-npm i
+| Category | Technologies |
+|---|---|
+| Frontend | React.js |
+| Programming Language | TypeScript |
+| Build Tool | Vite |
+| UI Components | shadcn/ui |
+| Styling | Tailwind CSS |
+| Backend Integration Structure | Supabase |
+| Version Control | Git, GitHub |
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Application Architecture
+
+```text
+                 USER
+                   |
+                   v
+           PHYSIOMATE AI
+            WEB APPLICATION
+                   |
+                   v
+          REACT + TYPESCRIPT
+                   |
+          -------------------
+          |                 |
+          v                 v
+    VOICE INTERACTION   POSE VISUALIZATION
+          |                 |
+          -------------------
+                   |
+                   v
+          EXERCISE MONITORING
+                   |
+                   v
+          SESSION STATISTICS
+          AND VISUAL FEEDBACK
+```
+
+*Note: This is a high-level conceptual representation of the application, not a verified backend processing architecture.*
+
+## Project Structure
+
+```text
+physio-mate-ai/
+│
+├── public/
+│
+├── screenshots/
+│   └── shoulder-raise-session.png
+│
+├── src/
+│   ├── components/
+│   ├── hooks/
+│   ├── integrations/
+│   │   └── supabase/
+│   ├── lib/
+│   ├── pages/
+│   ├── utils/
+│   ├── App.tsx
+│   ├── App.css
+│   ├── index.css
+│   └── main.tsx
+│
+├── supabase/
+├── package.json
+├── index.html
+└── README.md
+```
+
+## Installation and Setup
+
+### Prerequisites
+
+- Node.js
+- npm
+- Git
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/RishithaKalava/physio-mate-ai.git
+```
+
+### 2. Navigate to the Project Directory
+
+```bash
+cd physio-mate-ai
+```
+
+### 3. Install Dependencies
+
+```bash
+npm install
+```
+
+### 4. Start the Development Server
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open the local development URL displayed in the terminal to access the application.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Future Enhancements
 
-**Use GitHub Codespaces**
+- Improved pose estimation and movement analysis.
+- Additional physiotherapy and rehabilitation exercises.
+- Personalized exercise recommendations.
+- Exercise history and progress visualization.
+- Enhanced voice interaction capabilities.
+- Improved accessibility and user experience.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+## Project Objectives
 
-## What technologies are used for this project?
+- Explore the application of computer vision concepts in physiotherapy.
+- Develop an interactive exercise monitoring interface.
+- Provide visual feedback and exercise performance statistics.
+- Build a modular and maintainable web application.
+- Explore the integration of AI-related interaction capabilities into healthcare applications.
 
-This project is built with:
+## Developer
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+**Rishitha Kalava**
 
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/86e2d420-4fb2-432a-bfdd-e31f3fa80b61) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- GitHub: [RishithaKalava](https://github.com/RishithaKalava)
+- Project Repository: [PhysioMate AI](https://github.com/RishithaKalava/physio-mate-ai)
