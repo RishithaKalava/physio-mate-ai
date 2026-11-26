@@ -27,7 +27,7 @@ PhysioMate AI aims to address this challenge by providing an interactive digital
 
 The exercise monitoring interface displays body pose landmarks, movement angle measurements and live session statistics.
 
-![PhysioMate AI - Shoulder Raise Exercise Monitoring](screenshots/shoulder-raise-session.png)
+![PhysioMate AI - Shoulder Raise Exercise Monitoring](screenshots/shoulder-raise-session1.png)
 
 *Figure 1: Shoulder Raise exercise monitoring interface.*
 
